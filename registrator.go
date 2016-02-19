@@ -11,7 +11,7 @@ import (
 
 	dockerapi "github.com/fsouza/go-dockerclient"
 	"github.com/gliderlabs/pkg/usage"
-	"github.com/gliderlabs/registrator/bridge"
+	"github.com/xytis/registrator/bridge"
 )
 
 var Version string
@@ -20,6 +20,7 @@ var versionChecker = usage.NewChecker("registrator", Version)
 
 var hostIp = flag.String("ip", "", "IP for ports mapped to the host")
 var internal = flag.Bool("internal", false, "Use internal ports instead of published ones")
+var global = flag.Bool("global", false, "Use container IP's as they are publicly available")
 var refreshInterval = flag.Int("ttl-refresh", 0, "Frequency with which service TTLs are refreshed")
 var refreshTtl = flag.Int("ttl", 0, "TTL for services (default is no expiry)")
 var forceTags = flag.String("tags", "", "Append tags for all registered services")
@@ -98,6 +99,7 @@ func main() {
 	b, err := bridge.New(docker, flag.Arg(0), bridge.Config{
 		HostIp:          *hostIp,
 		Internal:        *internal,
+		Global:          *global,
 		ForceTags:       *forceTags,
 		RefreshTtl:      *refreshTtl,
 		RefreshInterval: *refreshInterval,

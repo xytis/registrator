@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/gliderlabs/registrator/bridge"
+	"github.com/xytis/registrator/bridge"
 )
 
 func init() {

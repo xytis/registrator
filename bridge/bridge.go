@@ -237,6 +237,10 @@ func (b *Bridge) newService(port ServicePort, isgroup bool) *Service {
 		port.HostIP = b.config.HostIp
 	}
 
+	if b.config.Global {
+		port.HostIP = container.NetworkSettings.IPAddress
+	}
+
 	metadata, metadataFromPort := serviceMetaData(container.Config, port.ExposedPort)
 
 	ignore := mapDefault(metadata, "ignore", "")
