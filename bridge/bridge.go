@@ -239,6 +239,12 @@ func (b *Bridge) newService(port ServicePort, isgroup bool) *Service {
 
 	if b.config.Global {
 		port.HostIP = container.NetworkSettings.IPAddress
+		if port.HostIP == "" {
+			net, ok := container.NetworkSettings.Networks[container.HostConfig.NetworkMode]
+			if ok {
+				port.HostIP = net.IPAddress
+			}
+		}
 	}
 
 	metadata, metadataFromPort := serviceMetaData(container.Config, port.ExposedPort)
