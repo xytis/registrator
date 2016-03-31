@@ -2,7 +2,7 @@ package bridge
 
 import (
 	"errors"
-	"log"
+	. "github.com/xytis/registrator/common"
 	"net"
 	"net/url"
 	"os"
@@ -36,7 +36,7 @@ func New(docker *dockerapi.Client, adapterUri string, config Config) (*Bridge, e
 		return nil, errors.New("unrecognized adapter: " + adapterUri)
 	}
 
-	log.Println("Using", uri.Scheme, "adapter:", uri)
+	Log.Infoln("Using", uri.Scheme, "adapter:", uri)
 	return &Bridge{
 		docker:         docker,
 		config:         config,
@@ -79,10 +79,10 @@ func (b *Bridge) Refresh() {
 		for _, service := range services {
 			err := b.registry.Refresh(service)
 			if err != nil {
-				log.Println("refresh failed:", service.ID, err)
+				Log.Warnln("refresh failed:", service.ID, err)
 				continue
 			}
-			log.Println("refreshed:", containerId[:12], service.ID)
+			Log.Infoln("refreshed:", containerId[:12], service.ID)
 		}
 	}
 }
@@ -93,13 +93,13 @@ func (b *Bridge) Sync(quiet bool) {
 
 	containers, err := b.docker.ListContainers(dockerapi.ListContainersOptions{})
 	if err != nil && quiet {
-		log.Println("error listing containers, skipping sync")
+		Log.Errorln("error listing containers, skipping sync")
 		return
 	} else if err != nil && !quiet {
-		log.Fatal(err)
+		Log.Fatalln(err)
 	}
 
-	log.Printf("Syncing services on %d containers", len(containers))
+	Log.Infoln("Syncing services on %d containers", len(containers))
 
 	// NOTE: This assumes reregistering will do the right thing, i.e. nothing..
 	for _, listing := range containers {
@@ -110,7 +110,7 @@ func (b *Bridge) Sync(quiet bool) {
 			for _, service := range services {
 				err := b.registry.Register(service)
 				if err != nil {
-					log.Println("sync register failed:", service, err)
+					Log.Errorln("sync register failed:", service, err)
 				}
 			}
 		}
@@ -119,11 +119,11 @@ func (b *Bridge) Sync(quiet bool) {
 	// Clean up services that were registered previously, but aren't
 	// acknowledged within registrator
 	if b.config.Cleanup {
-		log.Println("Cleaning up dangling services")
+		Log.Infoln("Cleaning up dangling services")
 
 		extServices, err := b.registry.Services()
 		if err != nil {
-			log.Println("cleanup failed:", err)
+			Log.Errorln("cleanup failed:", err)
 			return
 		}
 
@@ -147,13 +147,13 @@ func (b *Bridge) Sync(quiet bool) {
 					}
 				}
 			}
-			log.Println("dangling:", extService.ID)
+			Log.Infoln("dangling:", extService.ID)
 			err := b.registry.Deregister(extService)
 			if err != nil {
-				log.Println("deregister failed:", extService.ID, err)
+				Log.Errorln("deregister failed:", extService.ID, err)
 				continue
 			}
-			log.Println(extService.ID, "removed")
+			Log.Infoln(extService.ID, "removed")
 		}
 	}
 }
@@ -165,14 +165,14 @@ func (b *Bridge) add(containerId string, quiet bool) {
 	}
 
 	if b.services[containerId] != nil {
-		log.Println("container, ", containerId[:12], ", already exists, ignoring")
+		Log.Infoln("container, ", containerId[:12], ", already exists, ignoring")
 		// Alternatively, remove and readd or resubmit.
 		return
 	}
 
 	container, err := b.docker.InspectContainer(containerId)
 	if err != nil {
-		log.Println("unable to inspect container:", containerId[:12], err)
+		Log.Errorln("unable to inspect container:", containerId[:12], err)
 		return
 	}
 
@@ -189,31 +189,31 @@ func (b *Bridge) add(containerId string, quiet bool) {
 	}
 
 	if len(ports) == 0 && !quiet {
-		log.Println("ignored:", container.ID[:12], "no published ports")
+		Log.Warnln("ignored:", container.ID[:12], "no published ports")
 		return
 	}
 
 	for _, port := range ports {
 		if b.config.Internal != true && port.HostPort == "" {
 			if !quiet {
-				log.Println("ignored:", container.ID[:12], "port", port.ExposedPort, "not published on host")
+				Log.Warnln("ignored:", container.ID[:12], "port", port.ExposedPort, "not published on host")
 			}
 			continue
 		}
 		service := b.newService(port, len(ports) > 1)
 		if service == nil {
 			if !quiet {
-				log.Println("ignored:", container.ID[:12], "service on port", port.ExposedPort)
+				Log.Warnln("ignored:", container.ID[:12], "service on port", port.ExposedPort)
 			}
 			continue
 		}
 		err := b.registry.Register(service)
 		if err != nil {
-			log.Println("register failed:", service, err)
+			Log.Errorln("register failed:", service, err)
 			continue
 		}
 		b.services[container.ID] = append(b.services[container.ID], service)
-		log.Println("added:", container.ID[:12], service.ID)
+		Log.Infoln("added:", container.ID[:12], service.ID)
 	}
 }
 
@@ -303,10 +303,10 @@ func (b *Bridge) remove(containerId string, deregister bool) {
 			for _, service := range services {
 				err := b.registry.Deregister(service)
 				if err != nil {
-					log.Println("deregister failed:", service.ID, err)
+					Log.Errorln("deregister failed:", service.ID, err)
 					continue
 				}
-				log.Println("removed:", containerId[:12], service.ID)
+				Log.Infoln("removed:", containerId[:12], service.ID)
 			}
 		}
 		deregisterAll(b.services[containerId])
@@ -333,16 +333,16 @@ func (b *Bridge) shouldRemove(containerId string) bool {
 		// the container has already been removed from Docker
 		// e.g. probabably run with "--rm" to remove immediately
 		// so its exit code is not accessible
-		log.Printf("registrator: container %v was removed, could not fetch exit code", containerId[:12])
+		Log.Errorln("registrator: container %v was removed, could not fetch exit code", containerId[:12])
 		return true
 	}
 
 	switch {
 	case err != nil:
-		log.Printf("registrator: error fetching status for container %v on \"die\" event: %v\n", containerId[:12], err)
+		Log.Errorln("registrator: error fetching status for container %v on \"die\" event: %v\n", containerId[:12], err)
 		return false
 	case container.State.Running:
-		log.Printf("registrator: not removing container %v, still running", containerId[:12])
+		Log.Errorln("registrator: not removing container %v, still running", containerId[:12])
 		return false
 	case container.State.ExitCode == 0:
 		return true
